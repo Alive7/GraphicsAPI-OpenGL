@@ -14,6 +14,8 @@
 #include "Camera.h"
 #include "Geometry.h"
 
+#include <NSim.h> /* Must still add cpp files for library */
+
 const double pi = 3.14159265358979323846;
 
 // function declaration
@@ -25,6 +27,10 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+
+// NSim graphics functions
+void printTree(class Tree* T, class Shader& S, unsigned int bBox, unsigned int p, glm::mat4& projection, glm::vec4& color);
+void print_tree(class Tree* T, class Shader& S, unsigned int bBox, unsigned int p);
 
 // constants
 #define SCR_WIDTH 1000
@@ -144,6 +150,14 @@ int main() {
     glm::vec4 purple(1.0f, 0.0f, 0.5f, 1.0f);
     glm::vec4 green(0.2f, 0.7f, 0.4f, 1.0f);
 
+    // NSim
+    std::vector<class Particle> ps_tree, ps_direct;
+    NSim_Init(ps_tree, 30);
+    NSim_Init(ps_direct, 30);
+    std::list<class Particle*> ptrs;
+    std::list<class Particle*>::iterator left, right, part;
+    double dt = 1 / 60.0;
+
     lastFrame = static_cast<float>(glfwGetTime());
     while (!glfwWindowShouldClose(window)) {
         // per-frame time logic
@@ -164,13 +178,46 @@ int main() {
         S2.set();
         S2.setUniform_Mat4("projection", projection);
         S2.setUniform_Mat4("view", C.GetViewMatrix());
-        glBindVertexArray(S_VAO);
 
-        
+        // NSim
+        for (std::vector<class Particle>::iterator p = ps_tree.begin(); p != ps_tree.end(); p++) ptrs.push_back(&*p);
+        left = ptrs.begin();
+        right = ptrs.end();
+        Tree* T = new Tree(ptrs, left, right);
+        part = T->getPartitionIterator(left, right);
+        buildTree(T, ptrs, left, right, part);
+        T->computeMassMoments(left, right);
+
+        orderParticles(ps_tree, ptrs);
+
+        printTree(T, S2, RP_VAO, R_VAO, projection, orange);
+
+        NSim_Step(ps_tree, T, dt);
+
+        delete T;
+        ptrs.erase(ptrs.begin(), ptrs.end());
+
+        NSim_Step(ps_direct, nullptr, dt);
+
+        glBindVertexArray(S_VAO);
         S2.setUniform_Vec4("color", purple);
-        glm::mat4 model = glm::mat4(1.0f);
-        S2.setUniform_Mat4("model", model);
-        glDrawElements(GL_TRIANGLES, S.indices.size(), GL_UNSIGNED_INT, 0);
+        for (int i = 0; i < ps_tree.size(); i++) {
+            glm::vec3 offset(ps_tree[i].coords[0], ps_tree[i].coords[1], ps_tree[i].coords[2]);
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::translate(model, offset);
+            S2.setUniform_Mat4("model", model);
+            glDrawElements(GL_TRIANGLES, S.indices.size(), GL_UNSIGNED_INT, 0);
+        }
+        /*
+        S2.setUniform_Vec4("color", green);
+        for (int i = 0; i < ps_direct.size(); i++) {
+            glm::vec3 offset(ps_direct[i].coords[0], ps_direct[i].coords[1], ps_direct[i].coords[2]);
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::translate(model, offset);
+            S2.setUniform_Mat4("model", model);
+            glDrawElements(GL_TRIANGLES, S.indices.size(), GL_UNSIGNED_INT, 0);
+        }
+        */
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -282,4 +329,54 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
 // glfw: whenever the mouse scroll wheel scrolls, this callback is called
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
     C.ProcessMouseScroll(static_cast<float>(yoffset));
+}
+
+// NSim
+
+void printTree(class Tree* T, class Shader& S, unsigned int bBox, unsigned int p, glm::mat4& projection, glm::vec4& color) {
+    // enable shader
+    S.set();
+    S.setUniform_Mat4("projection", projection);
+    S.setUniform_Mat4("view", C.GetViewMatrix());
+    S.setUniform_Vec4("color", color);
+    print_tree(T, S, bBox, p);
+}
+
+void print_tree(class Tree* T, class Shader& S, unsigned int bBox, unsigned int p) {
+    // check if leaf contains only one particle
+    double tol = 1e-5;
+    glm::mat4 model = glm::mat4(1.0f);
+    if (T->x_max - T->x_min > tol && T->y_max - T->y_min > tol && T->z_max - T->z_min > tol) {
+        // draw bounding box
+        glBindVertexArray(bBox);
+        model = glm::translate(model, glm::vec3((T->x_max + T->x_min) / 2, (T->y_max + T->y_min) / 2, (T->z_max + T->z_min) / 2));
+        model = glm::scale(model, glm::vec3(T->x_max - T->x_min, T->y_max - T->y_min, T->z_max - T->z_min));
+        S.setUniform_Mat4("model", model);
+        glDrawElements(GL_LINES, 24, GL_UNSIGNED_INT, 0);
+    }
+    if (T->l != nullptr || T->r != nullptr) {
+        // draw partition
+        glBindVertexArray(p);
+        model = glm::mat4(1.0f);
+        // determine axis
+        if (T->axis == Partition_axis::X) {
+            model = glm::rotate(model, 3 * (float)pi / 2, glm::vec3(0, 1, 0));
+            model = glm::translate(model, glm::vec3((T->z_max + T->z_min) / 2, (T->y_max + T->y_min) / 2, -(T->x_max + T->x_min) / 2));
+            model = glm::scale(model, glm::vec3(T->z_max - T->z_min, T->y_max - T->y_min, 1));
+        }
+        else if (T->axis == Partition_axis::Y) {
+            model = glm::rotate(model, (float)pi / 2, glm::vec3(1, 0, 0));
+            model = glm::translate(model, glm::vec3((T->x_max + T->x_min) / 2, (T->z_max + T->z_min) / 2, -(T->y_max + T->y_min) / 2));
+            model = glm::scale(model, glm::vec3(T->x_max - T->x_min, T->z_max - T->z_min, 1));
+        }
+        else {
+            model = glm::translate(model, glm::vec3((T->x_max + T->x_min) / 2, (T->y_max + T->y_min) / 2, (T->z_max + T->z_min) / 2));
+            model = glm::scale(model, glm::vec3(T->x_max - T->x_min, T->y_max - T->y_min, 1));
+        }
+        S.setUniform_Mat4("model", model);
+        glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, 0); // glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    }
+    // recurse
+    if (T->l != nullptr) print_tree(T->l, S, bBox, p);
+    if (T->r != nullptr) print_tree(T->r, S, bBox, p);
 }
