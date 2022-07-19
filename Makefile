@@ -12,7 +12,7 @@ LIBS=Libs/
 
 TARGETS=OpenGL
 OBJECTS=Source.o Camera.o Geometry.o Shader.o Texture.o glad.o
-
+NSIM_OBJECTS=NSim/NSim.o NSim/Integrator.o NSim/PoissonSolver.o NSim/MassTree.o NSim/Particle.o
 # A note on variables:
 # $@: the target filename.
 # $*: the target filename without the file extension.
@@ -35,7 +35,7 @@ Texture.o: Texture.cpp Texture.h
 glad.o: gladsrc/glad.c Include/glad/glad.h
 	$(CXX) $(CXX_FLAGS) -I$(INCLUDE) -L$(LIBS) -c $<
 
-OpenGL: $(OBJECTS)
+OpenGL: $(OBJECTS) $(NSIM_OBJECTS)
 	$(CXX) $(CXX_FLAGS) -o $@ $^
 	rm -f *.o
 
