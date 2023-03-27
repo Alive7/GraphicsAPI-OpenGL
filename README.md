@@ -1,4 +1,4 @@
-# OpenGL-Libs
+# GraphicsAPI-OpenGL
 
 An elementary graphics api providing native 2D and 3D model primatives, texturing, elementary lighting, and model loading. Based off the tutorial by Joey de Vries found at https://learnopengl.com/
 
