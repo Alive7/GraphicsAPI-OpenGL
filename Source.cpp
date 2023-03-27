@@ -1,382 +1,396 @@
-#include <glad/glad.h> /* must add glad.c */
+#include "Geometry.h"
+#include "Shader.h"
+#include "Texture.h"
+#include "CubeMap.h"
+#include "Camera.h"
+#include "Runtimefunctions.h"
+
+#include "Mesh.h"
+#include "Model.h"
+
+#include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm/glm.hpp>
 #include <glm/glm/gtc/matrix_transform.hpp>
-#include <glm/glm/gtc/type_ptr.hpp>
+#include <stb/stb_image.h>
 
 #include <iostream>
 #include <string>
 #include <cmath>
 #include <vector>
 
-#include "Shader.h"
-#include "Texture.h"
-#include "Camera.h"
-#include "Geometry.h"
-
-#include <NSim.h> /* Must still add cpp files for library */
-
 const double pi = 3.14159265358979323846;
 
-// function declaration
-void glfwInitSetup(void);
-GLFWwindow* glfwWindowSetup(void);
-void gladInit(void);
-
-void framebuffer_size_callback(GLFWwindow* window, int width, int height);
-void processInput(GLFWwindow* window);
-void mouse_callback(GLFWwindow* window, double xpos, double ypos);
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
-
-// NSim graphics functions
-void printTree(class Tree* T, class Shader& S, unsigned int bBox, unsigned int p, glm::mat4& projection, glm::vec4& color);
-void print_tree(class Tree* T, class Shader& S, unsigned int bBox, unsigned int p);
-
-// constants
-#define SCR_WIDTH 1000
-#define SCR_HEIGHT 800
-
-// global
-float alpha_v = 0.0f;
-// camera
-Camera C(glm::vec3(0.0f, 0.0f, 15.0f));
-float lastX = SCR_WIDTH / 2.0f;
-float lastY = SCR_HEIGHT / 2.0f;
-bool firstMouse = true;
-// timing
-float deltaTime;
-float lastFrame;
-
 int main() {
+    // Init functions
     glfwInitSetup();
-
-    GLFWwindow* window = glfwWindowSetup();
-
+    GLFWwindow* window = glfwWindowSetup("OpenGL Test");
     gladInit();
-
+    
+    // enable depth testing
     glEnable(GL_DEPTH_TEST);
+    // enable transparancy
+    //glEnable(GL_BLEND);
+    //glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    // enable face culling - need to be creful with 2d primatives
+    glEnable(GL_CULL_FACE);
+    // disable writing to the depth buffer
+    //glDepthMask(GL_FALSE);
+    // change depth test comparison
+    //glDepthFunc(GL_LESS);
 
+    // enable stencil testing
+    //glEnable(GL_STENCIL_TEST);
+    // disable writing to the stencil buffer
+    //glStencilMask(0x00);
+    // set options for stencil test
+    //glStencilFunc(GL_NOTEQUAL, 1, 0xFF);
+    //glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+
+    // check number of vertex attributes
     int nrAttributes;
     glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &nrAttributes);
-    std::cout << "Maximum vertex attributes supported: " << nrAttributes << std::endl;
+    std::cout << "Maximum vertex attributes supported: " << nrAttributes << "\n";
 
-    Shader S1("VertexShader.vs", "FragmentShader.fs");
-    Shader S2("VertexSimple.vs", "FragmentSimple.fs");
+    // Shaders
+    //Shader shaderGeo("Shaders/GeometrySimple.vs", "Shaders/passthrough.gs", "Shaders/GeometrySimple.fs");
+    Shader shaderGeo("Shaders/GeometryInstanced.vs", "", "Shaders/GeometrySimple.fs");
+    Shader shaderBox("Shaders/Skybox.vs", "", "Shaders/Skybox.fs");
+    //Shader screenShader("Shaders/GeometryNoCam.vs", "Shaders/GeometryConst.fs");
+    //Shader shader("Shaders/GeometryLightingTexture.vs", "Shaders/GeometryLightingTexture.fs");
+    //Shader sourceShader("Shaders/GeometrySimple.vs", "Shaders/GeometrySimple.fs");
+    //Shader modelShader("Shaders/Model.vs", "Shaders/Model.fs");
 
-    Sphere S(.5, 40, 40);
+    
+    // Shapes
+    //Sphere shape(.5, 40, 40);
+    RectangularPrism shape(.1, .1, .1);
+    //RectangularPrism shape(1, 1, 1, Decomp_type::TRI);
+    //Rectangle shape(1, 1, Decomp_type::TRI);
+    //Triangle shape(1, 1, 1, Triangle_type::SSS);
+    //RegularPolygon shape(10, 1);
 
-    std::vector<float> vs = S.vertices;
-    std::vector<unsigned int> indices = S.indices;
+    size_t instances = 100000;
+    shape.initalizeInstancing(instances);
 
-    unsigned int S_VBO, S_VAO, S_EBO;
-    glGenVertexArrays(1, &S_VAO);
-    glGenBuffers(1, &S_VBO);
-    glGenBuffers(1, &S_EBO);
+    /*
+    for (int i = 0; i < shape.vertices.size(); i+=3) {
+        std::cout << "[" << shape.vertices[i] << ", " << shape.vertices[i + 1] << ", " << shape.vertices[i + 2] << "]\t";
+        if ((i+2) % 12 == 11) std::cout << std::endl;
+    }
+    std::cout << std::endl;
+    for (int i = 0; i < shape.indices.size(); i+=3) {
+        std::cout << "[" << shape.indices[i] << ", " << shape.indices[i + 1] << ", " << shape.indices[i + 2] << "]\t";
+        if ((i + 2) % 6 == 5) std::cout << std::endl;
+    }
+    std::cout << std::endl;
+    */
 
-    glBindVertexArray(S_VAO);
+    //Rectangle floor(1, 1, Decomp_type::TRI);
+    //Sphere lightSource(.05, 40, 40);
 
-    glBindBuffer(GL_ARRAY_BUFFER, S_VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vs[0]) * vs.size(), vs.data(), GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, S_EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices[0]) * indices.size(), indices.data(), GL_STATIC_DRAW);
-
-    // position attribute
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    //glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
     // draw in wireframe polygons.
     //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-    RectangularPrism RP(1, 1, 1, Decomp_type::WIR);
+    // Textures
+    //Texture texture1("container.png");
+    //Texture texture2("glass.png");
+    //Texture texture2("container_specular.png");
+    //Texture texture3("glow_text.jpg");
 
-    vs = RP.vertices;
-    indices = RP.indices;
+    // world space positions of cubes
+    /*
+    glm::vec3 cubePositions[] = {
+        glm::vec3(0.0f,  0.0f,  0.0f),
+        glm::vec3(2.0f,  5.0f, -15.0f),
+        glm::vec3(-1.5f, -2.2f, -2.5f),
+        glm::vec3(-3.8f, -2.0f, -12.3f),
+        glm::vec3(2.4f, -0.4f, -3.5f),
+        glm::vec3(-1.7f,  3.0f, -7.5f),
+        glm::vec3(1.3f, -2.0f, -2.5f),
+        glm::vec3(1.5f,  2.0f, -2.5f),
+        glm::vec3(1.5f,  0.2f, -1.5f),
+        glm::vec3(-1.3f,  1.0f, -1.5f)
+    };
+    */
 
-    unsigned int RP_VBO, RP_VAO, RP_EBO;
-    glGenVertexArrays(1, &RP_VAO);
-    glGenBuffers(1, &RP_VBO);
-    glGenBuffers(1, &RP_EBO);
+    // Shader Initalization    
+    shaderGeo.set();
+    // Gemonetry Simple
+    shaderGeo.setUniform_Vec3("color", glm::vec3(1.0, 0.2, 0.4));
+    //shader.setUniform_Int("texture0", texture1.unit);
+    /*
+    // Geometry Lighting
+    // material properties
+    //.setUniform_Vec3("material.ambient", glm::vec3(1.0f, 0.5f, 0.31f));
+    //shader.setUniform_Vec3("material.diffuse", glm::vec3(1.0f, 0.5f, 0.31f));
+    //shader.setUniform_Vec3("material.specular", glm::vec3(0.5f, 0.5f, 0.5f));
+    shader.setUniform_Int("material.diffuse", texture1.unit);
+    shader.setUniform_Int("material.specular", texture2.unit);
+    //shader.setUniform_Int("material.emission", texture3.unit);
+    shader.setUniform_Float("material.shininess", 32.0f);
 
-    glBindVertexArray(RP_VAO);
+    // directional light
+    glm::vec3 dirLight_col(1.0f, 1.0f, 1.0f);
+    shader.setUniform_Vec3("dirLight.direction", glm::vec3(-0.2f, -1.0f, -0.3f));
+    shader.setUniform_Vec3("dirLight.ambient", dirLight_col*glm::vec3(0.05f));
+    shader.setUniform_Vec3("dirLight.diffuse", dirLight_col*glm::vec3(0.4f));
+    shader.setUniform_Vec3("dirLight.specular", dirLight_col*glm::vec3(0.5f));
 
-    glBindBuffer(GL_ARRAY_BUFFER, RP_VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vs[0]) * vs.size(), vs.data(), GL_STATIC_DRAW);
+    // point light
+    glm::vec3 pntLight_pos(1.2f, 1.0f, 2.0f);
+    //glm::vec3 pntLight_col(0.2f, 0.7f, 1.0f);
+    glm::vec3 pntLight_col(1.0f, 1.0f, 1.0f);
+    shader.setUniform_Vec3("pos_src_pnt", pntLight_pos);
+    shader.setUniform_Vec3("pntLight.ambient", pntLight_col*glm::vec3(0.05f));
+    shader.setUniform_Vec3("pntLight.diffuse", pntLight_col*glm::vec3(0.8f));
+    shader.setUniform_Vec3("pntLight.specular", pntLight_col*glm::vec3(1.0f));
+    shader.setUniform_Float("pntLight.constant", 1.0f);
+    shader.setUniform_Float("pntLight.linear", 0.09f);
+    shader.setUniform_Float("pntLight.quadratic", 0.032f);
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, RP_EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices[0]) * indices.size(), indices.data(), GL_STATIC_DRAW);
+    // spot light
+    glm::vec3 sptLight_col(1.0f, 1.0f, 1.0f);
+    shader.setUniform_Vec3("sptLight.ambient", sptLight_col*glm::vec3(0.0f));
+    shader.setUniform_Vec3("sptLight.diffuse", sptLight_col*glm::vec3(1.0f));
+    shader.setUniform_Vec3("sptLight.specular", sptLight_col*glm::vec3(1.0f));
+    shader.setUniform_Float("sptLight.constant", 1.0f);
+    shader.setUniform_Float("sptLight.linear", 0.09f);
+    shader.setUniform_Float("sptLight.quadratic", 0.032f);
+    shader.setUniform_Float("sptLight.innerCutOff", glm::cos(glm::radians(12.5f)));
+    shader.setUniform_Float("sptLight.outerCutOff", glm::cos(glm::radians(15.0f)));
+    */
 
-    // position attribute
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
+    //sourceShader.set();
+    //sourceShader.setUniform_Vec3("color", pntLight_col);
 
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    //glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    // draw in wireframe polygons.
-    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    //stbi_set_flip_vertically_on_load(true);
+    //Model ourModel("Models/backpack.obj");
 
-    Rectangle R(1, 1, Decomp_type::WIR);
+    /*
+    unsigned int textureColorbuffer;
+    glGenTextures(1, &textureColorbuffer);
+    glBindTexture(GL_TEXTURE_2D, textureColorbuffer);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 800, 600, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glBindTexture(GL_TEXTURE_2D, 0);
 
-    vs = R.vertices;
-    indices = R.indices;
+    unsigned int rbo;
+    glGenRenderbuffers(1, &rbo);
+    glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, 800, 600);
+    glBindRenderbuffer(GL_RENDERBUFFER, 0);
 
-    unsigned int R_VBO, R_VAO, R_EBO;
-    glGenVertexArrays(1, &R_VAO);
-    glGenBuffers(1, &R_VBO);
-    glGenBuffers(1, &R_EBO);
+    unsigned int framebuffer;
+    glGenFramebuffers(1, &framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureColorbuffer, 0);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
 
-    glBindVertexArray(R_VAO);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
 
-    glBindBuffer(GL_ARRAY_BUFFER, R_VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vs[0]) * vs.size(), vs.data(), GL_STATIC_DRAW);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    */
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, R_EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices[0]) * indices.size(), indices.data(), GL_STATIC_DRAW);
-    // position attribute
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
+    std::vector<std::string> faces {
+        "Textures/skybox/right.jpg",
+        "Textures/skybox/left.jpg",
+        "Textures/skybox/top.jpg",  
+        "Textures/skybox/bottom.jpg",
+        "Textures/skybox/front.jpg",
+        "Textures/skybox/back.jpg"
+    };
+    CubeMap skybox(faces);
 
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    //glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    // draw in wireframe polygons.
-    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    // start timing
+    float t0 = static_cast<float>(glfwGetTime());
 
-    glm::vec4 orange(1.0f, 0.5f, 0.2f, 1.0f);
-    glm::vec4 purple(1.0f, 0.0f, 0.5f, 1.0f);
-    glm::vec4 green(0.2f, 0.7f, 0.4f, 1.0f);
+    glm::mat4 projection = glm::mat4(1.0f);
+    glm::mat4 view = glm::mat4(1.0f);
+    glm::mat4 model = glm::mat4(1.0f);
 
-    // NSim
-    std::vector<class Particle> ps_tree, ps_direct;
-    NSim_Init(ps_tree, 30);
-    NSim_Init(ps_direct, 30);
-    std::list<class Particle*> ptrs;
-    std::list<class Particle*>::iterator left, right, part;
-    double dt = 1 / 60.0;
+    std::vector<glm::mat4> modelMatrices(instances);
+    srand(glfwGetTime());
+    float radius = 25.0;
+    float offset = 2.5f;
+    for (size_t i = 0; i < instances; i++) {
+        model = glm::mat4(1.0f);
+        // 1. translation: displace along circle with 'radius' in range [-offset, offset]
+        float angle = (float)i / (float)instances * 360.0f;
+        float displacement = (rand() % (int)(2 * offset * 100)) / 100.0f - offset;
+        float x = sin(angle) * radius + displacement;
+        displacement = (rand() % (int)(2 * offset * 100)) / 100.0f - offset;
+        float y = displacement * 0.4f; // keep height of field smaller compared to width of x and z
+        displacement = (rand() % (int)(2 * offset * 100)) / 100.0f - offset;
+        float z = cos(angle) * radius + displacement;
+        model = glm::translate(model, glm::vec3(x, y, z));
 
-    lastFrame = static_cast<float>(glfwGetTime());
+        // 2. scale: scale between 0.05 and 0.25f
+        float scale = (rand() % 20) / 100.0f + 0.05;
+        model = glm::scale(model, glm::vec3(scale));
+
+        // 3. rotation: add random rotation around a (semi)randomly picked rotation axis vector
+        float rotAngle = (rand() % 360);
+        model = glm::rotate(model, rotAngle, glm::vec3(0.4f, 0.6f, 0.8f));
+
+        // 4. now add to list of matrices
+        modelMatrices[i] = model;
+    }
+
+    model = glm::mat4(1.0f);
+
+    // render loop
     while (!glfwWindowShouldClose(window)) {
         // per-frame time logic
-        float currentFrame = static_cast<float>(glfwGetTime());
-        deltaTime = currentFrame - lastFrame;
-        lastFrame = currentFrame;
+        float t1 = static_cast<float>(glfwGetTime());
+        float dt = t1 - t0;
+        t0 = t1;
 
-        //std::cout << 1/deltaTime << std::endl;
+        processInput(window, dt);
 
-        processInput(window);
+        for (size_t i = 0; i < instances; i++) {
+            float rotAngle = 2 * pi * dt / ((float)(i%100) + 1 / 10);
+            modelMatrices[i] = glm::rotate(modelMatrices[i], rotAngle, glm::vec3(0.4f, 0.6f, 0.8f));
+        }
+        
+        shape.sendInstancedData(modelMatrices);
+
+        /*
+        // first pass
+        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // we're not using the stencil buffer now
+        glEnable(GL_DEPTH_TEST);
+
+        glm::mat4 projection = glm::perspective(glm::radians(CAMERA.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+        //glm::mat4 projection = glm::ortho(0.0f, (float)SCR_WIDTH, 0.0f, (float)SCR_HEIGHT, 0.1f, 100.0f);
+        glm::mat4 view = CAMERA.GetViewMatrix();
+        glm::mat4 model = glm::mat4(1.0f);
+
+        shader.set();
+        shader.setUniform_Mat4("projection", projection);
+        shader.setUniform_Mat4("view", view);
+        shader.setUniform_Mat4("model", model);
+        shape.draw();
+
+        // second pass
+        glBindFramebuffer(GL_FRAMEBUFFER, 0); // back to default
+        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        screenShader.set();
+        glDisable(GL_DEPTH_TEST);
+        glBindTexture(GL_TEXTURE_2D, textureColorbuffer);
+        floor.draw();
+        */
 
         // render background
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        //glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glm::mat4 projection = glm::perspective(glm::radians(C.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+        projection = glm::perspective(glm::radians(CAMERA.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+        //projection = glm::ortho(0.0f, (float)SCR_WIDTH, 0.0f, (float)SCR_HEIGHT, 0.1f, 100.0f);
+        view = CAMERA.GetViewMatrix();
+        model = glm::mat4(1.0f);
+
+        //shader.setUniform_Vec4("color", glm::vec4(0.8,0.4,0.1,1.0));
+
+        //shader.setUniform_Vec3("pos_src_spt", CAMERA.Position);
+        //shader.setUniform_Vec3("spotLight.direction", -CAMERA.Z_axis);
+        //shader.setUniform_Vec3("sptLight.direction", glm::vec3(0,0,-1));
         
-        S2.set();
-        S2.setUniform_Mat4("projection", projection);
-        S2.setUniform_Mat4("view", C.GetViewMatrix());
+        shaderGeo.set();
+        shaderGeo.setUniform_Mat4("projection", projection);
+        shaderGeo.setUniform_Mat4("view", view);
 
-        // NSim
-        for (std::vector<class Particle>::iterator p = ps_tree.begin(); p != ps_tree.end(); p++) ptrs.push_back(&*p);
-        left = ptrs.begin();
-        right = ptrs.end();
-        Tree* T = new Tree(ptrs, left, right);
-        part = T->getPartitionIterator(left, right);
-        buildTree(T, ptrs, left, right, part);
-        T->computeMassMoments(left, right);
+        //texture1.bind();
+        //texture2.bind();
+        //texture3.bind();
 
-        orderParticles(ps_tree, ptrs);
+        //shader.setUniform_Int("texture0", texture1.unit);
 
-        printTree(T, S2, RP_VAO, R_VAO, projection, orange);
+        // make sure we don't update the stencil buffer while drawing the floor
+        //glStencilMask(0x00);
+        //model = glm::mat4(1.0f);
+        //model = glm::scale(model, glm::vec3(1.0f, 2.0f, 1.0f));
+        //model = glm::rotate(model, glm::radians((float)90), glm::vec3(1.0f, 0.0f, 0.0f));
+        //model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.51f));
+        //shader.setUniform_Mat4("model", model);
+        //floor.draw();
 
-        NSim_Step(ps_tree, T, dt);
 
-        delete T;
-        ptrs.erase(ptrs.begin(), ptrs.end());
-
-        NSim_Step(ps_direct, nullptr, dt);
-
-        glBindVertexArray(S_VAO);
-        S2.setUniform_Vec4("color", purple);
-        for (int i = 0; i < ps_tree.size(); i++) {
-            glm::vec3 offset(ps_tree[i].coords[0], ps_tree[i].coords[1], ps_tree[i].coords[2]);
-            glm::mat4 model = glm::mat4(1.0f);
-            model = glm::translate(model, offset);
-            S2.setUniform_Mat4("model", model);
-            glDrawElements(GL_TRIANGLES, S.indices.size(), GL_UNSIGNED_INT, 0);
-        }
+        //texture2.bind();
+        //shader.setUniform_Int("texture0", texture2.unit);
+        model = glm::mat4(1.0f);
+        model = glm::rotate(model, (float)(2 * pi * t1 / 5000), glm::vec3(0.0f, 1.0f, 0.0f));
+        shaderGeo.setUniform_Mat4("model", model);
+        shape.drawInstanced(instances);
         /*
-        S2.setUniform_Vec4("color", green);
-        for (int i = 0; i < ps_direct.size(); i++) {
-            glm::vec3 offset(ps_direct[i].coords[0], ps_direct[i].coords[1], ps_direct[i].coords[2]);
-            glm::mat4 model = glm::mat4(1.0f);
-            model = glm::translate(model, offset);
-            S2.setUniform_Mat4("model", model);
-            glDrawElements(GL_TRIANGLES, S.indices.size(), GL_UNSIGNED_INT, 0);
+        for (int i = 0; i < instances; i++) {
+            //model = glm::mat4(1.0f);
+            //model = glm::scale(model, glm::vec3(1.5f, 1.5f, 1.5f));
+            shaderGeo.setUniform_Mat4("model", modelMatrices[i]);
+            //shape.drawInstanced(instances);
+            shape.draw();
         }
         */
 
+        //glDisable(GL_CULL_FACE);
+
+        /*
+        for (size_t i = 0; i < 10; i++) {
+            model = glm::mat4(1.0f);
+            model = glm::translate(model, cubePositions[i]);
+            float angle = 20.0f * i + 20.0f;
+            model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
+            shader.setUniform_Mat4("model", model);
+            shader.setUniform_Mat3("norm", glm::mat3(glm::transpose(glm::inverse(view * model))));
+            shape.draw();
+        }
+        */
+        
+        //sourceShader.set();
+        //sourceShader.setUniform_Mat4("projection", projection);
+        //sourceShader.setUniform_Mat4("view", view);
+        //model = glm::mat4(1.0f);
+        //model = glm::translate(model, pntLight_pos);
+        //sourceShader.setUniform_Mat4("model", model);
+        //lightSource.draw();
+        
+        /*
+        modelShader.set();
+        modelShader.setUniform_Mat4("projection", projection);
+        modelShader.setUniform_Mat4("view", view);
+
+        // render the loaded model
+        model = glm::mat4(1.0f);
+        //model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f)); // translate it down so it's at the center of the scene
+        //model = glm::scale(model, glm::vec3(1.0f, 1.0f, 1.0f));	// it's a bit too big for our scene, so scale it down
+        modelShader.setUniform_Mat4("model", model);
+        ourModel.Draw(modelShader);
+        */
+
+        shaderBox.set();
+        shaderBox.setUniform_Mat4("projection", projection);
+        shaderBox.setUniform_Mat4("view", glm::mat4(glm::mat3(view)));
+
+        // rmeove awkwardness by passing textures and cubemaps and possibly colors to draw function?
+        
+        glBindVertexArray(shape.VAO);
+        skybox.bind();
+        glCullFace(GL_FRONT);
+        glDepthFunc(GL_LEQUAL);
+        shape.draw();
+        glDepthFunc(GL_LESS);
+        glCullFace(GL_BACK);
+        
         glfwSwapBuffers(window);
         glfwPollEvents();
-
     }
-
-    //glDeleteVertexArrays(1, &VAO);
-    //glDeleteBuffers(1, &VBO);
-
-    glDeleteVertexArrays(1, &RP_VAO);
-    glDeleteBuffers(1, &RP_VBO);
-    glDeleteBuffers(1, &RP_EBO);
-
-    glDeleteVertexArrays(1, &R_VAO);
-    glDeleteBuffers(1, &R_VBO);
-    glDeleteBuffers(1, &R_EBO);
-
-    glDeleteVertexArrays(1, &S_VAO);
-    glDeleteBuffers(1, &S_VBO);
-    glDeleteBuffers(1, &S_EBO);
 
     glfwTerminate();
     return 0;
-}
-
-// function implementations
-
-void glfwInitSetup(void) {
-    glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3); // 4
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3); // 6
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-#ifdef __APPLE__
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-#endif
-}
-
-GLFWwindow* glfwWindowSetup(void) {
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Test", NULL, NULL);
-    if (window == NULL) {
-        std::cout << "Failed to create GLFW window" << std::endl;
-        glfwTerminate();
-        return NULL;
-    }
-    glfwMakeContextCurrent(window);
-    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-    glfwSetCursorPosCallback(window, mouse_callback);
-    glfwSetScrollCallback(window, scroll_callback);
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-    return window;
-}
-
-void gladInit(void) {
-    // glad: load all OpenGL function pointers
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-        std::cout << "Failed to initialize GLAD" << std::endl;
-        glfwTerminate();
-    }
-}
-
-void processInput(GLFWwindow* window) {
-    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, true);
-    else if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) {
-        alpha_v += .1f;
-        if (alpha_v >= 1.0f) alpha_v = 1.0f;
-    }
-    else if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) {
-        alpha_v -= .1f;
-        if (alpha_v <= 0.0f) alpha_v = 0.0f;
-    }
-
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        C.ProcessKeyboard(Camera_Movement::FORWARD, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        C.ProcessKeyboard(Camera_Movement::BACKWARD, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        C.ProcessKeyboard(Camera_Movement::LEFT, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        C.ProcessKeyboard(Camera_Movement::RIGHT, deltaTime);
-}
-
-// glfw: whenever the window size changed (by OS or user resize) this callback function executes
-void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
-    // make sure the viewport matches the new window dimensions; note that width and 
-    // height will be significantly larger than specified on retina displays.
-    glViewport(0, 0, width, height);
-}
-
-// glfw: whenever the mouse moves, this callback is called
-void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
-    float xpos = static_cast<float>(xposIn);
-    float ypos = static_cast<float>(yposIn);
-
-    if (firstMouse) {
-        lastX = xpos;
-        lastY = ypos;
-        firstMouse = false;
-    }
-
-    float xoffset = xpos - lastX;
-    float yoffset = lastY - ypos; // reversed since y-coordinates go from bottom to top
-    lastX = xpos;
-    lastY = ypos;
-
-    C.ProcessMouseMovement(xoffset, yoffset);
-}
-
-// glfw: whenever the mouse scroll wheel scrolls, this callback is called
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
-    C.ProcessMouseScroll(static_cast<float>(yoffset));
-}
-
-// NSim
-
-void printTree(class Tree* T, class Shader& S, unsigned int bBox, unsigned int p, glm::mat4& projection, glm::vec4& color) {
-    // enable shader
-    S.set();
-    S.setUniform_Mat4("projection", projection);
-    S.setUniform_Mat4("view", C.GetViewMatrix());
-    S.setUniform_Vec4("color", color);
-    print_tree(T, S, bBox, p);
-}
-
-void print_tree(class Tree* T, class Shader& S, unsigned int bBox, unsigned int p) {
-    // check if leaf contains only one particle
-    double tol = 1e-5;
-    glm::mat4 model = glm::mat4(1.0f);
-    if (T->x_max - T->x_min > tol && T->y_max - T->y_min > tol && T->z_max - T->z_min > tol) {
-        // draw bounding box
-        glBindVertexArray(bBox);
-        model = glm::translate(model, glm::vec3((T->x_max + T->x_min) / 2, (T->y_max + T->y_min) / 2, (T->z_max + T->z_min) / 2));
-        model = glm::scale(model, glm::vec3(T->x_max - T->x_min, T->y_max - T->y_min, T->z_max - T->z_min));
-        S.setUniform_Mat4("model", model);
-        glDrawElements(GL_LINES, 24, GL_UNSIGNED_INT, 0);
-    }
-    if (T->l != nullptr || T->r != nullptr) {
-        // draw partition
-        glBindVertexArray(p);
-        model = glm::mat4(1.0f);
-        // determine axis
-        if (T->axis == Partition_axis::X) {
-            model = glm::rotate(model, 3 * (float)pi / 2, glm::vec3(0, 1, 0));
-            model = glm::translate(model, glm::vec3((T->z_max + T->z_min) / 2, (T->y_max + T->y_min) / 2, -(T->x_max + T->x_min) / 2));
-            model = glm::scale(model, glm::vec3(T->z_max - T->z_min, T->y_max - T->y_min, 1));
-        }
-        else if (T->axis == Partition_axis::Y) {
-            model = glm::rotate(model, (float)pi / 2, glm::vec3(1, 0, 0));
-            model = glm::translate(model, glm::vec3((T->x_max + T->x_min) / 2, (T->z_max + T->z_min) / 2, -(T->y_max + T->y_min) / 2));
-            model = glm::scale(model, glm::vec3(T->x_max - T->x_min, T->z_max - T->z_min, 1));
-        }
-        else {
-            model = glm::translate(model, glm::vec3((T->x_max + T->x_min) / 2, (T->y_max + T->y_min) / 2, (T->z_max + T->z_min) / 2));
-            model = glm::scale(model, glm::vec3(T->x_max - T->x_min, T->y_max - T->y_min, 1));
-        }
-        S.setUniform_Mat4("model", model);
-        glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, 0); // glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-    }
-    // recurse
-    if (T->l != nullptr) print_tree(T->l, S, bBox, p);
-    if (T->r != nullptr) print_tree(T->r, S, bBox, p);
 }

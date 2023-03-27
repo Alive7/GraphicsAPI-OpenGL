@@ -1,10 +1,9 @@
 #ifndef GEOMETRY_HH
 #define GEOMETRY_HH
 
-#include <iostream>
+#include <glm/glm/glm.hpp>
+
 #include <vector>
-#include <cmath>
-#include <string>
 
 enum class Triangle_type {
 	SSS,
@@ -17,59 +16,81 @@ enum class Decomp_type {
 	WIR
 };
 
+// TODO: 
+// conditionally generate colors, textures, normals
+// use efficent rectangular prism methods if no textures or normals
+// choose appropriate shaders based on populated attributes
+// correlation between material properties and material type irrespective of material color
+// wire frame decomp for all shapes
+// consistent signed area decompositions for gl_FrontFacing
+// efficent index packing using shape dependant draw modes
 
+// Abstract Shape class
 class Shape {
 public:
+	// vertex array object - reference to vertex attribute pointers
+	unsigned int VAO;
+	// element buffer object - reference to index draw order
+	unsigned int EBO;
+	// vertex buffer object - reference to vertex data in GPU
+	unsigned int VBO;
+	unsigned int instanceVBO;
+	Decomp_type decomp;
 	std::vector<unsigned int> indices;
 	std::vector<float> vertices;
+	std::vector<float> colors;
+	std::vector<float> texcoords;
+	std::vector<float> normals;
 
-	virtual void texCoords(int tex_dim);
+	Shape(void);
+
+	void generateColorData(void);
+	virtual void generateTexCoords(void);
+	virtual void generateNormals(void) = 0;
+	void sendVertexData(void);
+	void sendInstancedData(const std::vector<glm::mat4>& models);
+	void initalizeInstancing(size_t instances);
+	void draw(void);
+	void drawInstanced(size_t instances);
+
+	~Shape(void);
 };
 
-class Triangle : public Shape {
+// abstract 2D shape class
+class Shape_2D : public Shape {
+public:
+	void generateNormals(void);
+};
+
+// 2D shape classes
+class Triangle : public Shape_2D {
 public:
 	Triangle(float s1, float s2, float s3, Triangle_type tri);
-	void texCoords(int tex_dim);
 };
 
-class Rectangle : public Shape {
+class Rectangle : public Shape_2D {
 public:
 	Rectangle(float l, float w, Decomp_type type);
-	void texCoords(int tex_dim);
 };
 
-class RegularPolygon : public Shape {
+class RegularPolygon : public Shape_2D {
 public:
-	RegularPolygon(void);
-	RegularPolygon(int n_sides, float circ_radius);
-	void texCoords(int tex_dim);
+	RegularPolygon(size_t n_sides, float circ_radius);
 };
 
+// 3D shape classes
 class RectangularPrism : public Shape {
 public:
+	RectangularPrism(float l, float w, float h);
 	RectangularPrism(float l, float w, float h, Decomp_type type);
-	void texCoords(int tex_dim);
+	void generateTexCoords(void);
+	void generateNormals(void);
 };
 
 class Sphere : public Shape {
 public:
-	Sphere(float r, int layers, int npts);
-	//void texCoords(int tex_dim);
+	Sphere(float r, size_t layers, size_t npts);
+	void generateNormals(void);
 };
-
-std::vector<float> createTriangle_SSS(float s1, float s2, float s3);
-std::vector<float> createTriangle_SSA(float s1, float s2, float theta);
-std::vector<float> createTriangle_SAA(float s, float theta1, float theta2);
-std::vector<float> createRectangle(float l, float w);
-std::vector<float> createPoint(void);
-std::vector<float> shift_z(std::vector<float> vs, float shift);
-std::vector<float> createRegularPolygon(int n_sides, float circ_radius);
-std::vector<unsigned int> trianglularDecomp_2D(int vs_size);
-std::vector<unsigned int> wireFrameDecomp_2D(int vs_size);
-std::vector<float> createRectangularPrism(float l, float w, float h);
-std::vector<unsigned int> trianglularDecomp_SQ(int vs_size);
-std::vector<unsigned int> wireFrameDecomp_SQ(int vs_size);
-std::vector<float> createSphere(float r, int layers, int npts);
-std::vector<unsigned int> trianglularDecomp_Sphere(int vs_size, int layers, int npts);
 
 #endif
