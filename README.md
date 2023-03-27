@@ -4,4 +4,4 @@ A simple collection of OpenGL headers providing basic graphics functions. This l
 
 To interface with my NBodySimulation repository, include the NSim.h header and add the TreeGraphics.cc functions to source.cpp.
 
-I have attempted to include a Makefile. It should be able to compile both OpenGL and NSim together although some mosification might be needed based on your specific directory structure. Moreover, glfw may or may not compile correctly.
+I have attempted to include a Makefile. It should be able to compile both OpenGL and NSim together although some modification might be needed based on your specific directory structure. Moreover, glfw may or may not compile correctly.
