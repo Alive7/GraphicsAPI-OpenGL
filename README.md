@@ -1,7 +1,7 @@
 # OpenGL-Libs
 
-A simple collection of OpenGL headers providing basic graphics functions. This library is based off the tutorial by Joey de Vries found at https://learnopengl.com/
+An elementary graphics api providing native 2D and 3D model primatives, texturing, elementary lighting, and model loading. Based off the tutorial by Joey de Vries found at https://learnopengl.com/
 
-To interface with my NBodySimulation repository, include the NSim.h header and add the TreeGraphics.cc functions to source.cpp.
+This update likely breaks compatibility with my NBodySimulation repo and the provided MakeFile.
 
-I have attempted to include a Makefile. It should be able to compile both OpenGL and NSim together although some modification might be needed based on your specific directory structure. Moreover, glfw may or may not compile correctly.
+Compilation requires GFLW, glad, and stbi amoung other dependances as outlined in LearnOpenGL.
